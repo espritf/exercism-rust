@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+
 pub type Value = i32;
 pub type Result = std::result::Result<(), Error>;
 
-pub struct Forth{
-    stack: Vec<Value>
+pub struct Forth {
+    stack: Vec<Value>,
+    words: HashMap<String, Vec<String>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -15,8 +18,9 @@ pub enum Error {
 
 impl Forth {
     pub fn new() -> Forth {
-        Forth{
+        Forth {
             stack: Vec::new(),
+            words: HashMap::new(),
         }
     }
 
@@ -25,8 +29,27 @@ impl Forth {
     }
 
     pub fn eval(&mut self, input: &str) -> Result {
-        for word in input.to_lowercase().split(' ') {
-            match word {
+        let normalized = input.to_lowercase();
+        let mut tokens = normalized.split(' ');
+        while let Some(token) = tokens.next() {
+            if let Some(exp) = self.words.get(token) {
+                self.eval(exp.join(" ").as_str())?;
+                continue;
+            }
+
+            match token {
+                ":" => {
+                    if let Some(word) = tokens.next() {
+                        self.words.insert(word.to_string(), Vec::new());
+                        while let Some(t) = tokens.next() {
+                            if t == ";" {
+                                break;
+                            }
+                            let ent = self.words.get_mut(word).unwrap();
+                            ent.push(t.to_string());
+                        }
+                    }
+                }
                 "+" => match (self.stack.pop(), self.stack.pop()) {
                     (Some(x), Some(y)) => self.stack.push(x + y),
                     _ => return Err(Error::StackUnderflow),
@@ -64,7 +87,7 @@ impl Forth {
                     _ => return Err(Error::StackUnderflow),
                 },
                 _ => {
-                    if let Ok(n) = word.parse() {
+                    if let Ok(n) = token.parse() {
                         self.stack.push(n);
                     }
                 }
