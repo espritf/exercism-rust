@@ -28,6 +28,67 @@ impl Forth {
         self.stack.as_slice()
     }
 
+    fn add(&mut self) -> Result {
+        match (self.stack.pop(), self.stack.pop()) {
+            (Some(x), Some(y)) => Ok(self.stack.push(x + y)),
+            _ => Err(Error::StackUnderflow),
+        }
+    }
+
+    fn sub(&mut self) -> Result {
+        match (self.stack.pop(), self.stack.pop()) {
+            (Some(x), Some(y)) => Ok(self.stack.push(y - x)),
+            _ => Err(Error::StackUnderflow),
+        }
+    }
+
+    fn mul(&mut self) -> Result {
+        match (self.stack.pop(), self.stack.pop()) {
+            (Some(x), Some(y)) => Ok(self.stack.push(y * x)),
+            _ => Err(Error::StackUnderflow),
+        }
+    }
+
+    fn div(&mut self) -> Result {
+        match (self.stack.pop(), self.stack.pop()) {
+            (Some(0), Some(_)) => return Err(Error::DivisionByZero),
+            (Some(x), Some(y)) => Ok(self.stack.push(y / x)),
+            _ => Err(Error::StackUnderflow),
+        }
+    }
+
+    fn dup(&mut self) -> Result {
+        match self.stack.last() {
+            Some(x) => Ok(self.stack.push(*x)),
+            _ => Err(Error::StackUnderflow),
+        }
+    }
+
+    fn drop(&mut self) -> Result {
+        match self.stack.pop() {
+            Some(_) => Ok(()),
+            _ => Err(Error::StackUnderflow),
+        }
+    }
+
+    fn swap(&mut self) -> Result {
+        match (self.stack.pop(), self.stack.pop()) {
+            (Some(x), Some(y)) => {
+                self.stack.push(x);
+                self.stack.push(y);
+                Ok(())
+            }
+            _ => Err(Error::StackUnderflow),
+        }
+    }
+
+    fn over(&mut self) -> Result {
+        match self.stack[..] {
+            [.., x, _] => Ok(self.stack.push(x)),
+            _ => return Err(Error::StackUnderflow),
+        }
+    }
+
     pub fn eval(&mut self, input: &str) -> Result {
         let normalized = input.to_lowercase();
         let mut tokens = normalized.split(' ');
@@ -50,42 +111,14 @@ impl Forth {
                         }
                     }
                 }
-                "+" => match (self.stack.pop(), self.stack.pop()) {
-                    (Some(x), Some(y)) => self.stack.push(x + y),
-                    _ => return Err(Error::StackUnderflow),
-                },
-                "-" => match (self.stack.pop(), self.stack.pop()) {
-                    (Some(x), Some(y)) => self.stack.push(y - x),
-                    _ => return Err(Error::StackUnderflow),
-                },
-                "*" => match (self.stack.pop(), self.stack.pop()) {
-                    (Some(x), Some(y)) => self.stack.push(y * x),
-                    _ => return Err(Error::StackUnderflow),
-                },
-                "/" => match (self.stack.pop(), self.stack.pop()) {
-                    (Some(0), Some(_)) => return Err(Error::DivisionByZero),
-                    (Some(x), Some(y)) => self.stack.push(y / x),
-                    _ => return Err(Error::StackUnderflow),
-                },
-                "dup" => match self.stack.last() {
-                    Some(x) => self.stack.push(*x),
-                    _ => return Err(Error::StackUnderflow),
-                },
-                "drop" => match self.stack.pop() {
-                    Some(_) => {}
-                    _ => return Err(Error::StackUnderflow),
-                },
-                "swap" => match (self.stack.pop(), self.stack.pop()) {
-                    (Some(x), Some(y)) => {
-                        self.stack.push(x);
-                        self.stack.push(y);
-                    }
-                    _ => return Err(Error::StackUnderflow),
-                },
-                "over" => match self.stack[..] {
-                    [.., x, _] => self.stack.push(x),
-                    _ => return Err(Error::StackUnderflow),
-                },
+                "+" => self.add()?,
+                "-" => self.sub()?,
+                "*" => self.mul()?,
+                "/" => self.div()?,
+                "dup" => self.dup()?,
+                "drop" => self.drop()?,
+                "swap" => self.swap()?,
+                "over" => self.over()?,
                 _ => {
                     if let Ok(n) = token.parse() {
                         self.stack.push(n);
