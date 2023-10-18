@@ -10,6 +10,11 @@ pub struct Forth {
     words: HashMap<String, Func>,
 }
 
+enum Token {
+    Val(Value),
+    Fun(Func),
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
     DivisionByZero,
@@ -104,6 +109,8 @@ impl Forth {
         let normalized = input.to_lowercase();
         let mut tokens = normalized.split(' ');
 
+        let mut ops: Vec<Token> = Vec::new();
+
         while let Some(token) = tokens.next() {
             match token {
                 ":" => {
@@ -124,14 +131,21 @@ impl Forth {
                 }
                 c => {
                     if let Ok(n) = c.parse() {
-                        self.stack.push(n);
-                        return Ok(());
+                        ops.push(Token::Val(n));
+                        continue;
                     }
                     if let Some(op) = self.words.get(c) {
-                        let f = op.as_ref();
-                        f(self);
+                        ops.push(Token::Fun(op.clone()));
+                        continue;
                     }
                 }
+            }
+        }
+
+        for op in ops {
+            match op {
+                Token::Val(n) => self.stack.push(n),
+                Token::Fun(f) => f(self)?,
             }
         }
 
