@@ -1,11 +1,13 @@
+use std::rc::Rc;
 use std::collections::HashMap;
 
 pub type Value = i32;
 pub type Result = std::result::Result<(), Error>;
+pub type Func = Rc<dyn Fn(&mut Forth) -> Result>;
 
 pub struct Forth {
     stack: Vec<Value>,
-    words: HashMap<String, Vec<String>>,
+    words: HashMap<String, Func>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -18,9 +20,18 @@ pub enum Error {
 
 impl Forth {
     pub fn new() -> Forth {
+        let mut words: HashMap<String, Func> = HashMap::new();
+        words.insert("+".to_string(), Rc::new(Self::add));
+        words.insert("-".to_string(), Rc::new(Self::sub));
+        words.insert("*".to_string(), Rc::new(Self::mul));
+        words.insert("/".to_string(), Rc::new(Self::div));
+        words.insert("dup".to_string(), Rc::new(Self::dup));
+        words.insert("drop".to_string(), Rc::new(Self::drop));
+        words.insert("swap".to_string(), Rc::new(Self::swap));
+        words.insert("over".to_string(), Rc::new(Self::over));
         Forth {
             stack: Vec::new(),
-            words: HashMap::new(),
+            words,
         }
     }
 
@@ -92,36 +103,33 @@ impl Forth {
     pub fn eval(&mut self, input: &str) -> Result {
         let normalized = input.to_lowercase();
         let mut tokens = normalized.split(' ');
-        while let Some(token) = tokens.next() {
-            if let Some(exp) = self.words.get(token) {
-                self.eval(exp.join(" ").as_str())?;
-                continue;
-            }
 
+        while let Some(token) = tokens.next() {
             match token {
                 ":" => {
                     if let Some(word) = tokens.next() {
-                        self.words.insert(word.to_string(), Vec::new());
+                        let mut definition = Vec::new();
+                        //self.words.insert(word.to_string(), Vec::new());
                         while let Some(t) = tokens.next() {
                             if t == ";" {
                                 break;
                             }
-                            let ent = self.words.get_mut(word).unwrap();
-                            ent.push(t.to_string());
+                            definition.push(t);
                         }
+                        let definition = definition.join(" ");
+                        self.words.insert(word.to_string(), Rc::new(move |s| {
+                            s.eval(definition.as_str())
+                        }));
                     }
                 }
-                "+" => self.add()?,
-                "-" => self.sub()?,
-                "*" => self.mul()?,
-                "/" => self.div()?,
-                "dup" => self.dup()?,
-                "drop" => self.drop()?,
-                "swap" => self.swap()?,
-                "over" => self.over()?,
-                _ => {
-                    if let Ok(n) = token.parse() {
+                c => {
+                    if let Ok(n) = c.parse() {
                         self.stack.push(n);
+                        return Ok(());
+                    }
+                    if let Some(op) = self.words.get(c) {
+                        let f = op.as_ref();
+                        f(self);
                     }
                 }
             }
