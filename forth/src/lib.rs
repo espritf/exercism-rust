@@ -1,5 +1,5 @@
-use std::rc::Rc;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 pub type Value = i32;
 pub type Result = std::result::Result<(), Error>;
@@ -10,6 +10,7 @@ pub struct Forth {
     words: HashMap<String, Func>,
 }
 
+#[derive(Clone)]
 enum Token {
     Val(Value),
     Fun(Func),
@@ -105,29 +106,31 @@ impl Forth {
         }
     }
 
-    pub fn eval(&mut self, input: &str) -> Result {
-        let normalized = input.to_lowercase();
-        let mut tokens = normalized.split(' ');
-
+    fn compile(&mut self, input: &Vec<&str>) -> std::result::Result<Vec<Token>, Error> {
         let mut ops: Vec<Token> = Vec::new();
-
-        while let Some(token) = tokens.next() {
+        let mut tokens = input.iter();
+        'outer: while let Some(&token) = tokens.next() {
             match token {
                 ":" => {
                     if let Some(word) = tokens.next() {
-                        let mut definition = Vec::new();
-                        //self.words.insert(word.to_string(), Vec::new());
-                        while let Some(t) = tokens.next() {
+                        if word.parse::<i32>().is_ok() {
+                            return Err(Error::InvalidWord);
+                        }
+
+                        let mut definition: Vec<&str> = Vec::new();
+                        while let Some(&t) = tokens.next() {
                             if t == ";" {
-                                break;
+                                let compiled = self.compile(&definition)?;
+                                self.words
+                                    .insert(word.to_string(), Rc::new(move |s| s.exec(&compiled)));
+
+                                continue 'outer;
                             }
                             definition.push(t);
                         }
-                        let definition = definition.join(" ");
-                        self.words.insert(word.to_string(), Rc::new(move |s| {
-                            s.eval(definition.as_str())
-                        }));
                     }
+
+                    return Err(Error::InvalidWord);
                 }
                 c => {
                     if let Ok(n) = c.parse() {
@@ -138,17 +141,31 @@ impl Forth {
                         ops.push(Token::Fun(op.clone()));
                         continue;
                     }
+
+                    return Err(Error::UnknownWord);
                 }
             }
         }
 
-        for op in ops {
+        Ok(ops)
+    }
+
+    fn exec(&mut self, input: &Vec<Token>) -> Result {
+        for op in input {
             match op {
-                Token::Val(n) => self.stack.push(n),
+                Token::Val(n) => self.stack.push(*n),
                 Token::Fun(f) => f(self)?,
             }
         }
 
         Ok(())
+    }
+
+    pub fn eval(&mut self, input: &str) -> Result {
+        let normalized = input.to_lowercase();
+        let tokens: Vec<&str> = normalized.split(' ').collect();
+        let tokens: Vec<Token> = self.compile(&tokens)?;
+
+        self.exec(&tokens)
     }
 }
