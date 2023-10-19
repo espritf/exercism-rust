@@ -68,7 +68,7 @@ impl Forth {
 
     fn div(&mut self) -> Result {
         match (self.stack.pop(), self.stack.pop()) {
-            (Some(0), Some(_)) => return Err(Error::DivisionByZero),
+            (Some(0), Some(_)) => Err(Error::DivisionByZero),
             (Some(x), Some(y)) => Ok(self.stack.push(y / x)),
             _ => Err(Error::StackUnderflow),
         }
@@ -102,12 +102,12 @@ impl Forth {
     fn over(&mut self) -> Result {
         match self.stack[..] {
             [.., x, _] => Ok(self.stack.push(x)),
-            _ => return Err(Error::StackUnderflow),
+            _ => Err(Error::StackUnderflow),
         }
     }
 
     fn compile(&mut self, input: &Vec<&str>) -> std::result::Result<Vec<Token>, Error> {
-        let mut ops: Vec<Token> = Vec::new();
+        let mut compiled: Vec<Token> = Vec::new();
         let mut tokens = input.iter();
         'outer: while let Some(&token) = tokens.next() {
             match token {
@@ -119,10 +119,10 @@ impl Forth {
 
                         let mut definition: Vec<&str> = Vec::new();
                         while let Some(&t) = tokens.next() {
-                            if t == ";" {
+                            if t == ";" && !definition.is_empty() {
                                 let compiled = self.compile(&definition)?;
-                                self.words
-                                    .insert(word.to_string(), Rc::new(move |s| s.exec(&compiled)));
+                                let func: Func = Rc::new(move |s| s.exec(&compiled));
+                                self.words.insert(word.to_string(), func);
 
                                 continue 'outer;
                             }
@@ -134,11 +134,11 @@ impl Forth {
                 }
                 c => {
                     if let Ok(n) = c.parse() {
-                        ops.push(Token::Val(n));
+                        compiled.push(Token::Val(n));
                         continue;
                     }
                     if let Some(op) = self.words.get(c) {
-                        ops.push(Token::Fun(op.clone()));
+                        compiled.push(Token::Fun(op.clone()));
                         continue;
                     }
 
@@ -147,7 +147,7 @@ impl Forth {
             }
         }
 
-        Ok(ops)
+        Ok(compiled)
     }
 
     fn exec(&mut self, input: &Vec<Token>) -> Result {
