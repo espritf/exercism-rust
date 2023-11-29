@@ -1,10 +1,17 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, usize};
 
 /// A munger which XORs a key with some data
 #[derive(Clone)]
 pub struct Xorcism<'a> {
     key: &'a [u8],
     index: usize,
+}
+
+// TODO why self.next() is not works?
+fn next(key: &[u8], index: &mut usize) -> u8 {
+    let r = key[*index];
+    *index = (*index + 1) % key.len();
+    r
 }
 
 impl<'a> Xorcism<'a> {
@@ -24,8 +31,7 @@ impl<'a> Xorcism<'a> {
     /// even with identical inputs.
     pub fn munge_in_place(&mut self, data: &mut [u8]) {
         for d in data.iter_mut() {
-            *d ^= self.key[self.index];
-            self.index = (self.index + 1) % self.key.len();
+            *d ^= next(&self.key, &mut self.index);
         }
     }
 
@@ -42,9 +48,7 @@ impl<'a> Xorcism<'a> {
             Data::Item: Borrow<u8>,
     {
         data.into_iter().map(|b| {
-            let r = b.borrow() ^ self.key[self.index];
-            self.index = (self.index + 1) % self.key.len();
-            r
+            b.borrow() ^ next(&self.key, &mut self.index)
         })
     }
 }
